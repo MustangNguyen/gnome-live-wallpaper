@@ -81,8 +81,14 @@ Put your own wallpapers in `~/.local/share/gnome-live-wallpaper/wallpapers/<name
 and select them with `gnome-live-wallpaper set <name>`. Uninstall removes only
 the bundled wallpapers.
 
-Playback options (pause on fullscreen, battery, mute, …) are in the Hanabi
-preferences: `gnome-extensions prefs hanabi-extension@jeffshee.github.io`.
+Open the preferences with
+`gnome-extensions prefs hanabi-extension@jeffshee.github.io`:
+
+- **General**: wallpaper path, playback and auto-pause options (from Hanabi).
+- **Particle Painting**: pick any image, preview it, set particle count,
+  brightness, return force and damping, then *Apply as Wallpaper*. The result
+  is saved in `~/.local/share/gnome-live-wallpaper/wallpapers/my-painting`.
+  Changes apply immediately; no restart needed.
 
 ## Wallpaper format
 

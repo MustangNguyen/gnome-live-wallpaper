@@ -24,6 +24,8 @@ import {
     gettext as _,
 } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
+import {particlePaintingPage} from './particlePrefs.js';
+
 interface PrefsWindow extends Adw.PreferencesWindow {
     settings: Gio.Settings;
 }
@@ -33,7 +35,10 @@ export default class HanabiExtensionPreferences extends ExtensionPreferences {
         const win = window as PrefsWindow;
         win.settings = this.getSettings();
 
-        const page = new Adw.PreferencesPage();
+        const page = new Adw.PreferencesPage({
+            title: _('General'),
+            icon_name: 'preferences-system-symbolic',
+        });
 
         const generalGroup = new Adw.PreferencesGroup({title: _('General')});
         page.add(generalGroup);
@@ -95,6 +100,7 @@ export default class HanabiExtensionPreferences extends ExtensionPreferences {
             _('Border width in pixels drawn inside the rounded-rect bounds (0 = disabled)'), 0, 20, 1, 1);
 
         window.add(page);
+        window.add(particlePaintingPage(window, win.settings));
         return Promise.resolve();
     }
 }

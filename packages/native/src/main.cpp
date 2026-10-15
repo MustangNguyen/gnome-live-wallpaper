@@ -36,11 +36,11 @@ static void require(bool ok,const std::string& message){if(!ok)throw std::runtim
 static std::string readFile(const std::string& path){std::ifstream in(path);require(bool(in),"Cannot read "+path);std::ostringstream out;out<<in.rdbuf();return out.str();}
 struct PaintingData{
  std::vector<float> homes,colors,sizes;std::vector<uint8_t> classes;double aspect;int rows;
- explicit PaintingData(const std::string& file){
+ PaintingData(const std::string& file,int budget){
   GError* error=nullptr;GdkPixbuf* original=gdk_pixbuf_new_from_file(file.c_str(),&error);
   if(!original){std::string why=error?error->message:"Image decode failed";g_clear_error(&error);throw std::runtime_error(why);}
   aspect=double(gdk_pixbuf_get_width(original))/gdk_pixbuf_get_height(original);
-  int cols=int(std::sqrt(96000*aspect));rows=96000/cols;int count=cols*rows;
+  int cols=int(std::sqrt(budget*aspect));rows=budget/cols;int count=cols*rows;
   GdkPixbuf* image=gdk_pixbuf_scale_simple(original,cols,rows,GDK_INTERP_BILINEAR);g_object_unref(original);
   require(image,"Image resampling failed");
   const uint8_t* rgba=gdk_pixbuf_read_pixels(image);int stride=gdk_pixbuf_get_rowstride(image),channels=gdk_pixbuf_get_n_channels(image);
@@ -76,7 +76,7 @@ struct Host{
  PaintingData painting;std::atomic<bool> paused{false},failed{false};bool preview=false;
  double brightness=.75,spring=.5,damping=.2;std::string capture;
  Host(const std::string& root):Host(root,json::parse(readFile(root+"/preset.json"))){}
- Host(const std::string& root,const json& preset):painting((std::filesystem::path(root)/preset.value("image",std::string("assets/starry-night.jpg"))).string()){brightness=preset.value("brightness",.75);spring=preset.value("spring",.5);damping=preset.value("damping",.2);
+ Host(const std::string& root,const json& preset):painting((std::filesystem::path(root)/preset.value("image",std::string("assets/starry-night.jpg"))).string(),std::clamp(preset.value("particleBudget",96000),20000,250000)){brightness=preset.value("brightness",.75);spring=preset.value("spring",.5);damping=preset.value("damping",.2);
  }
  void input(const json& data){
   if(data.value("type","")=="pause"){

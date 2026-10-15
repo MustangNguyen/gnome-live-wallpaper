@@ -23,6 +23,7 @@ and is imported here with `git subtree`. Compared with upstream it adds:
 - Pointer forwarding from GNOME Shell to the renderer over D-Bus
   (`setPointer(monitor, x, y, active)`), so wallpapers can react to the cursor.
 - Optional shared web view across monitors (`project.json` → `hanabi.sharedView`).
+- A *Particle Painting* preferences page for the native renderer.
 - A fix for GNOME 50 window previews while a renderer window moves between
   monitors.
 

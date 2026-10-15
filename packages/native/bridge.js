@@ -135,6 +135,21 @@ const settings = new Gio.Settings({
   schema_id: "io.github.jeffshee.hanabi-extension",
 });
 settings.connect("changed::video-path", stop);
+// Restarting on preset changes applies edits (from the preferences window or a
+// text editor) without a manual restart; Hanabi relaunches the renderer.
+const presetMonitor = Gio.File.new_for_path(`${root}/preset.json`).monitor_file(
+  Gio.FileMonitorFlags.WATCH_MOVES,
+  null,
+);
+presetMonitor.connect("changed", (_monitor, _file, _other, event) => {
+  if (
+    event === Gio.FileMonitorEvent.CHANGES_DONE_HINT ||
+    event === Gio.FileMonitorEvent.RENAMED ||
+    event === Gio.FileMonitorEvent.MOVED_IN ||
+    event === Gio.FileMonitorEvent.CREATED
+  )
+    stop();
+});
 const displaySignal = Gio.DBus.session.signal_subscribe(
   "org.gnome.Mutter.DisplayConfig",
   "org.gnome.Mutter.DisplayConfig",
