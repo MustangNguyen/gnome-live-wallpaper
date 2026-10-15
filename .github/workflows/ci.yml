@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: packages/hanabi/package-lock.json
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ pkg-config gettext libglib2.0-bin \
+            libwayland-dev libegl-dev libgles-dev libgdk-pixbuf-2.0-dev
+      - run: npm ci --no-audit --no-fund
+        working-directory: packages/hanabi
+      - run: npm run check
+      - run: npm run build
+      - run: npm run build:native
+      - name: Pack
+        run: npm pack --dry-run

@@ -1,0 +1,53 @@
+{
+  "name": "gnome-live-wallpaper",
+  "version": "0.1.0",
+  "description": "Live wallpapers for GNOME Shell on Wayland: a Hanabi fork with HTML wallpapers and a native C++/OpenGL ES particle renderer.",
+  "keywords": [
+    "gnome",
+    "gnome-shell",
+    "wayland",
+    "live-wallpaper",
+    "wallpaper",
+    "hanabi",
+    "opengl",
+    "particles"
+  ],
+  "homepage": "https://github.com/MustangNguyen/gnome-live-wallpaper",
+  "bugs": "https://github.com/MustangNguyen/gnome-live-wallpaper/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MustangNguyen/gnome-live-wallpaper.git"
+  },
+  "license": "GPL-3.0-or-later",
+  "author": "Mustang Nguyen",
+  "type": "module",
+  "bin": {
+    "gnome-live-wallpaper": "bin/gnome-live-wallpaper.mjs"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "dist/extension/",
+    "prebuilt/",
+    "wallpapers/",
+    "packages/native/CMakeLists.txt",
+    "packages/native/src/",
+    "packages/native/shaders/",
+    "packages/native/protocol/",
+    "packages/native/tests/physics_test.cpp",
+    "packages/native/third_party/",
+    "NOTICE.md"
+  ],
+  "os": [
+    "linux"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node scripts/build-dist.mjs",
+    "build:native": "node scripts/build-native.mjs",
+    "check": "cd packages/hanabi && npm run typecheck && npx eslint src/",
+    "prepack": "node scripts/build-dist.mjs"
+  }
+}

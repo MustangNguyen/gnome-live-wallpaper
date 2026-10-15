@@ -1,0 +1,14 @@
+[
+  {
+    "pid": 165621,
+    "cmd": "gjs -m ~/.local/share/gnome-shell/extensions/hanabi-extension@jeffshee.github.io/renderer/renderer.js -P ~/.local/share/gnome-shell/extensions/hanabi-extension@jeffshee.github.io -F <wallpaper> ",
+    "Pss": 16021,
+    "Rss": 33812
+  },
+  {
+    "pid": 165721,
+    "cmd": "~/.local/share/gnome-shell/extensions/hanabi-extension@jeffshee.github.io/renderer/native/particle-wallpaper <wallpaper> [{\"index\":0,\"x\":0,\"y\":0,\"width\":1920,\"height\":1080},{\"index\":1,\"x\":1920,\"y\":0,\"width\":1920,\"height\":1080}] ",
+    "Pss": 91911,
+    "Rss": 168664
+  }
+]

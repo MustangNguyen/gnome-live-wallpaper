@@ -1,0 +1,10 @@
+{
+  "title": "Starry Night · Particle Painting",
+  "type": "web",
+  "file": "index.html",
+  "description": "Van Gogh's The Starry Night as ~96k glowing particles that scatter around the cursor and spring back. Native C++/OpenGL ES renderer; the HTML version runs in WebKit.",
+  "hanabi": {
+    "sharedView": false,
+    "renderer": "native"
+  }
+}
