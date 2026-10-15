@@ -6,5 +6,6 @@
   "particleBudget": 96000,
   "interactionHz": 240,
   "fpsCap": null,
-  "brightness": 0.75
+  "brightness": 0.75,
+  "backgroundColor": "#000000"
 }

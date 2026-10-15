@@ -34,30 +34,50 @@ static volatile sig_atomic_t interrupted=0;
 static void signalHandler(int){interrupted=1;}
 static void require(bool ok,const std::string& message){if(!ok)throw std::runtime_error(message);}
 static std::string readFile(const std::string& path){std::ifstream in(path);require(bool(in),"Cannot read "+path);std::ostringstream out;out<<in.rdbuf();return out.str();}
+struct Particles{std::vector<float> homes,colors,sizes;std::vector<uint8_t> classes;};
+static constexpr double sizeTable[]={0.65,0.85,1,1.25,1.55};
+static uint8_t sizeClass(double luminance,int i){double hash=std::sin((i+1)*127.1)*43758.5453;return uint8_t(std::clamp(int(std::floor(luminance*4.5+(hash-std::floor(hash))*1.6-0.35)),0,4));}
 struct PaintingData{
- std::vector<float> homes,colors,sizes;std::vector<uint8_t> classes;double aspect;int rows;
+ Particles image;double aspect;int cols,rows;std::array<float,3> background{0,0,0};
  PaintingData(const std::string& file,int budget){
   GError* error=nullptr;GdkPixbuf* original=gdk_pixbuf_new_from_file(file.c_str(),&error);
   if(!original){std::string why=error?error->message:"Image decode failed";g_clear_error(&error);throw std::runtime_error(why);}
   aspect=double(gdk_pixbuf_get_width(original))/gdk_pixbuf_get_height(original);
-  int cols=int(std::sqrt(budget*aspect));rows=budget/cols;int count=cols*rows;
-  GdkPixbuf* image=gdk_pixbuf_scale_simple(original,cols,rows,GDK_INTERP_BILINEAR);g_object_unref(original);
-  require(image,"Image resampling failed");
-  const uint8_t* rgba=gdk_pixbuf_read_pixels(image);int stride=gdk_pixbuf_get_rowstride(image),channels=gdk_pixbuf_get_n_channels(image);
-  homes.resize(count*3);colors.resize(count*3);classes.resize(count);sizes.resize(count);
-  constexpr double sizeTable[]={0.65,0.85,1,1.25,1.55};
+  cols=int(std::sqrt(budget*aspect));rows=budget/cols;int count=cols*rows;
+  GdkPixbuf* scaled=gdk_pixbuf_scale_simple(original,cols,rows,GDK_INTERP_BILINEAR);g_object_unref(original);
+  require(scaled,"Image resampling failed");
+  const uint8_t* rgba=gdk_pixbuf_read_pixels(scaled);int stride=gdk_pixbuf_get_rowstride(scaled),channels=gdk_pixbuf_get_n_channels(scaled);
+  auto& p=image;p.homes.resize(count*3);p.colors.resize(count*3);p.classes.resize(count);p.sizes.resize(count);
   for(int y=0;y<rows;y++)for(int x=0;x<cols;x++){
    int i=y*cols+x;const auto* pixel=rgba+y*stride+x*channels;double alpha=channels==4?pixel[3]/255.0:1.0;
    double luminance=(pixel[0]*0.2126+pixel[1]*0.7152+pixel[2]*0.0722)/255*alpha;
-   double hash=std::sin((i+1)*127.1)*43758.5453;
-   classes[i]=uint8_t(std::clamp(int(std::floor(luminance*4.5+(hash-std::floor(hash))*1.6-0.35)),0,4));sizes[i]=sizeTable[classes[i]];
-   homes[i*3]=((x+0.5+std::sin(i*13.37)*0.16)/cols-0.5)*2*aspect;
-   homes[i*3+1]=(0.5-(y+0.5+std::sin(i*7.91)*0.16)/rows)*2;
-   for(int c=0;c<3;c++)colors[i*3+c]=pixel[c]/255.0*alpha;
+   p.classes[i]=sizeClass(luminance,i);p.sizes[i]=sizeTable[p.classes[i]];
+   home(p.homes.data()+i*3,x,y,i);
+   for(int c=0;c<3;c++)p.colors[i*3+c]=pixel[c]/255.0*alpha;
   }
-  g_object_unref(image);
+  g_object_unref(scaled);
+ }
+ void home(float* out,int x,int y,int i)const{out[0]=((x+0.5+std::sin(i*13.37)*0.16)/cols-0.5)*2*aspect;out[1]=(0.5-(y+0.5+std::sin(i*7.91)*0.16)/rows)*2;out[2]=0;}
+ // The image particles plus background particles that continue the same grid
+ // over the letterbox bars a width x height screen leaves around the image.
+ Particles layout(int width,int height)const{
+  Particles p=image;const double ppu=std::min(double(height),width/aspect)/2,cellW=2*aspect/cols,cellH=2./rows;
+  const int colMin=std::min(0,int(std::floor((aspect-width/2./ppu)/cellW))-1),rowMin=std::min(0,int(std::floor((1-height/2./ppu)/cellH))-1);
+  const int colMax=cols-1-colMin,rowMax=rows-1-rowMin;
+  const double luminance=background[0]*0.2126+background[1]*0.7152+background[2]*0.0722;
+  for(int y=rowMin;y<=rowMax;y++)for(int x=colMin;x<=colMax;x++){
+   if(y>=0&&y<rows&&x>=0&&x<cols)continue;
+   int i=int(p.sizes.size());float position[3];home(position,x,y,i);
+   p.homes.insert(p.homes.end(),position,position+3);p.colors.insert(p.colors.end(),background.begin(),background.end());
+   p.classes.push_back(sizeClass(luminance,i));p.sizes.push_back(sizeTable[p.classes.back()]);
+  }
+  return p;
  }
 };
+static std::array<float,3> parseColor(const std::string& text){
+ require(text.size()==7&&text[0]=='#'&&text.find_first_not_of("0123456789abcdefABCDEF",1)==std::string::npos,"backgroundColor must look like #rrggbb");
+ std::array<float,3> rgb;for(int c=0;c<3;c++)rgb[c]=std::stoi(text.substr(1+c*2,2),nullptr,16)/255.f;return rgb;
+}
 struct Host;
 struct Screen{
  Host* host;int index,x,y;std::atomic<int> width,height;
@@ -65,7 +85,7 @@ struct Screen{
  std::atomic<bool> configured{false},ready{true},running{true};wl_callback* callback=nullptr;
  std::thread worker;std::mutex mutex;std::condition_variable wake;
  struct Input{double x,y,time;bool active;};std::vector<Input> inputs;
- std::atomic<uint64_t> frames{0},samples{0};std::atomic<double> physicsMs{0};
+ std::atomic<uint64_t> frames{0},samples{0},count{0};std::atomic<double> physicsMs{0};
  Screen(Host* h,const json& config):host(h),index(config.at("index")),x(config.at("x")),y(config.at("y")),width(config.at("width")),height(config.at("height")){}
  void render();void stop(){running=false;wake.notify_all();}
 };
@@ -77,6 +97,7 @@ struct Host{
  double brightness=.75,spring=.5,damping=.2;std::string capture;
  Host(const std::string& root):Host(root,json::parse(readFile(root+"/preset.json"))){}
  Host(const std::string& root,const json& preset):painting((std::filesystem::path(root)/preset.value("image",std::string("assets/starry-night.jpg"))).string(),std::clamp(preset.value("particleBudget",96000),20000,250000)){brightness=preset.value("brightness",.75);spring=preset.value("spring",.5);damping=preset.value("damping",.2);
+  painting.background=parseColor(preset.value("backgroundColor",std::string("#000000")));
  }
  void input(const json& data){
   if(data.value("type","")=="pause"){
@@ -143,31 +164,36 @@ void Screen::render(){
   target=eglCreateWindowSurface(host->egl,host->config,reinterpret_cast<EGLNativeWindowType>(window),nullptr);require(target!=EGL_NO_SURFACE,"EGL surface failed");
   require(eglMakeCurrent(host->egl,target,target,context),"eglMakeCurrent failed");eglSwapInterval(host->egl,0);
   GLuint shader=program();glUseProgram(shader);GLuint vao;glGenVertexArrays(1,&vao);glBindVertexArray(vao);
-  painting::Physics physics(host->painting.homes,host->painting.classes);physics.setDynamics(host->spring,host->damping);painting::Sampler sampler(240);
-  GLuint buffers[5];glGenBuffers(5,buffers);
+  painting::Sampler sampler(240);GLuint buffers[5];glGenBuffers(5,buffers);
   const char* names[]={"position","aVelocity","aHome","aColor","aSize"};
-  const std::vector<float>* values[]={&physics.positions,&physics.velocities,&host->painting.homes,&host->painting.colors,&host->painting.sizes};
-  for(int i=0;i<5;i++){glBindBuffer(GL_ARRAY_BUFFER,buffers[i]);glBufferData(GL_ARRAY_BUFFER,values[i]->size()*sizeof(float),values[i]->data(),i<2?GL_DYNAMIC_DRAW:GL_STATIC_DRAW);GLint loc=glGetAttribLocation(shader,names[i]);require(loc>=0,"Missing shader attribute");glVertexAttribPointer(loc,i==4?1:3,GL_FLOAT,GL_FALSE,0,nullptr);glEnableVertexAttribArray(loc);}
+  Particles particles;std::unique_ptr<painting::Physics> physics;std::array<const std::vector<float>*,5> values{};
+  // Background particles depend on the screen shape, so a resize rebuilds them.
+  auto build=[&]{
+   particles=host->painting.layout(w,h);physics=std::make_unique<painting::Physics>(particles.homes,particles.classes);physics->setDynamics(host->spring,host->damping);count=particles.sizes.size();
+   values={&physics->positions,&physics->velocities,&particles.homes,&particles.colors,&particles.sizes};
+   for(int i=0;i<5;i++){glBindBuffer(GL_ARRAY_BUFFER,buffers[i]);glBufferData(GL_ARRAY_BUFFER,values[i]->size()*sizeof(float),values[i]->data(),i<2?GL_DYNAMIC_DRAW:GL_STATIC_DRAW);GLint loc=glGetAttribLocation(shader,names[i]);require(loc>=0,"Missing shader attribute");glVertexAttribPointer(loc,i==4?1:3,GL_FLOAT,GL_FALSE,0,nullptr);glEnableVertexAttribArray(loc);}
+  };
+  build();
   const GLint projection=glGetUniformLocation(shader,"projectionMatrix"),model=glGetUniformLocation(shader,"modelViewMatrix"),size=glGetUniformLocation(shader,"uSize"),time=glGetUniformLocation(shader,"uWaterTime");
   glUniform1f(glGetUniformLocation(shader,"uHaloScale"),2.2);glUniform1f(glGetUniformLocation(shader,"uBrightness"),host->brightness);
   float mv[]={1,0,0,0,0,1,0,0,0,0,1,0,0,0,-3,1};glUniformMatrix4fv(model,1,GL_FALSE,mv);
-  glEnable(GL_BLEND);glBlendFunc(GL_ONE,GL_ONE_MINUS_SRC_ALPHA);glDisable(GL_DEPTH_TEST);glClearColor(7.f/255,10.f/255,17.f/255,1);
+  glEnable(GL_BLEND);glBlendFunc(GL_ONE,GL_ONE_MINUS_SRC_ALPHA);glDisable(GL_DEPTH_TEST);glClearColor(host->painting.background[0],host->painting.background[1],host->painting.background[2],1);
   double previous=0,accumulator=0,water=0;bool captured=false;std::vector<Input> batch;batch.reserve(256);
   while(running){
    {std::unique_lock<std::mutex> lock(mutex);wake.wait_for(lock,std::chrono::milliseconds(50),[&]{return !running||(ready&&!host->paused);});}
    if(!running)break;
    if(host->paused){previous=0;accumulator=0;sampler.reset();continue;}
    if(!ready.exchange(false))continue;
-   int nextW=width,nextH=height;if(w!=nextW||h!=nextH){w=nextW;h=nextH;wl_egl_window_resize(window,w,h,0,0);sampler.reset();previous=0;}
+   int nextW=width,nextH=height;if(w!=nextW||h!=nextH){w=nextW;h=nextH;wl_egl_window_resize(window,w,h,0,0);sampler.reset();previous=0;build();}
    double now=milliseconds(),dt=previous?std::clamp((now-previous)/1000.,0.,1./15):0;previous=now;water+=dt;
    double displayHeight=std::min(double(h),w/host->painting.aspect),ppu=displayHeight/2;
    {std::lock_guard<std::mutex> lock(mutex);batch.swap(inputs);}for(auto p:batch){if(p.active)sampler.push((p.x*w-w/2.)/ppu,(h/2.-p.y*h)/ppu,p.time);else sampler.reset();}batch.clear();
-   double started=milliseconds();sampler.drain(now,[&](const painting::Stroke& raw){auto stroke=raw;stroke.radius=std::clamp(65/ppu,.12,.34);stroke.strength=1;physics.disturb(stroke);samples++;},32);
-   accumulator=std::min(accumulator+dt,8./120);int steps=0;while(accumulator>=1./120&&steps<8){physics.step(1./120);accumulator-=1./120;steps++;}physicsMs=milliseconds()-started;
+   double started=milliseconds();sampler.drain(now,[&](const painting::Stroke& raw){auto stroke=raw;stroke.radius=std::clamp(65/ppu,.12,.34);stroke.strength=1;physics->disturb(stroke);samples++;},32);
+   accumulator=std::min(accumulator+dt,8./120);int steps=0;while(accumulator>=1./120&&steps<8){physics->step(1./120);accumulator-=1./120;steps++;}physicsMs=milliseconds()-started;
    for(int i=0;i<2;i++){glBindBuffer(GL_ARRAY_BUFFER,buffers[i]);glBufferSubData(GL_ARRAY_BUFFER,0,values[i]->size()*sizeof(float),values[i]->data());}
    float pm[]={float(2*ppu/w),0,0,0,0,float(2*ppu/h),0,0,0,0,float(-2/9.9),0,0,0,float(-10.1/9.9),1};
    glUniformMatrix4fv(projection,1,GL_FALSE,pm);glUniform1f(size,std::max(1.,displayHeight/host->painting.rows*1.25));glUniform1f(time,water);
-   glViewport(0,0,w,h);glClear(GL_COLOR_BUFFER_BIT);glDrawArrays(GL_POINTS,0,physics.positions.size()/3);
+   glViewport(0,0,w,h);glClear(GL_COLOR_BUFFER_BIT);glDrawArrays(GL_POINTS,0,physics->positions.size()/3);
    if(!captured&&index==0&&!host->capture.empty()&&frames>=120){captureFrame(host->capture,w,h);captured=true;}
    // Callback is dispatched on the control thread; each screen is independently paced.
    callback=wl_surface_frame(surface);wl_callback_add_listener(callback,&frameListener,this);
@@ -208,7 +234,7 @@ int main(int argc,char** argv){
    if(fds[0].revents&(POLLERR|POLLHUP))host.failed=true;
    wl_display_dispatch_pending(host.display);
    if(fds[1].revents&(POLLIN|POLLHUP)){char buffer[8192];ssize_t n=read(STDIN_FILENO,buffer,sizeof(buffer));if(n>0){input.append(buffer,n);size_t pos;while((pos=input.find('\n'))!=std::string::npos){auto line=input.substr(0,pos);input.erase(0,pos+1);try{host.input(json::parse(line));}catch(const std::exception&){}}if(input.size()>65536)input.clear();}else if(n==0){stdinOpen=false;if(!host.preview)break;}}
-   double now=milliseconds();if(now-metricsAt>=2000){json report=json::object();for(size_t i=0;i<host.screens.size();i++){auto& s=*host.screens[i];uint64_t frames=s.frames.load();report[std::to_string(s.index)]={{"fps",(frames-previousFrames[i])*1000/(now-metricsAt)},{"framesRendered",frames},{"count",host.painting.sizes.size()},{"width",s.width.load()},{"height",s.height.load()},{"paused",host.paused.load()},{"physicsMs",s.physicsMs.load()},{"interactionSamples",s.samples.load()},{"receivedAt",g_get_real_time()/1000}};previousFrames[i]=frames;}
+   double now=milliseconds();if(now-metricsAt>=2000){json report=json::object();for(size_t i=0;i<host.screens.size();i++){auto& s=*host.screens[i];uint64_t frames=s.frames.load();report[std::to_string(s.index)]={{"fps",(frames-previousFrames[i])*1000/(now-metricsAt)},{"framesRendered",frames},{"count",s.count.load()},{"width",s.width.load()},{"height",s.height.load()},{"paused",host.paused.load()},{"physicsMs",s.physicsMs.load()},{"interactionSamples",s.samples.load()},{"receivedAt",g_get_real_time()/1000}};previousFrames[i]=frames;}
     auto text=report.dump(2);g_file_set_contents(metricsFile.c_str(),text.c_str(),text.size(),nullptr);metricsAt=now;}
   }
   for(auto& s:host.screens)s->stop();

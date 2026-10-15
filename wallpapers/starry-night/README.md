@@ -24,6 +24,7 @@ The native renderer reads these keys from `preset.json` at startup:
 | `spring` | `0.5` | Return force toward the home position |
 | `damping` | `0.2` | Velocity damping |
 | `particleBudget` | `96000` | Particle count (20,000–250,000), rounded to the image grid |
+| `backgroundColor` | `#000000` | Color (`#rrggbb`) of the particles that fill the screen around the image |
 
 The renderer restarts by itself when `preset.json` changes. Cursor
 interpolation (240 Hz) is fixed; `interactionHz`, `quality` and `fpsCap` are

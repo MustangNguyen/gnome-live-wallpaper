@@ -86,9 +86,10 @@ Open the preferences with
 
 - **General**: wallpaper path, playback and auto-pause options (from Hanabi).
 - **Particle Painting**: pick any image, preview it, set particle count,
-  brightness, return force and damping, then *Apply as Wallpaper*. The result
-  is saved in `~/.local/share/gnome-live-wallpaper/wallpapers/my-painting`.
-  Changes apply immediately; no restart needed.
+  brightness, return force, damping and the background particle color, then
+  *Apply as Wallpaper*. The result is saved in
+  `~/.local/share/gnome-live-wallpaper/wallpapers/my-painting`. Changes
+  apply immediately; no restart needed.
 
 ## Wallpaper format
 

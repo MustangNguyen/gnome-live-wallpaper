@@ -20,6 +20,7 @@
 // user wallpaper folder; the renderer bridge restarts when preset.json changes.
 
 import Adw from 'gi://Adw';
+import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
@@ -36,6 +37,7 @@ interface Preset {
     brightness: number;
     spring: number;
     damping: number;
+    backgroundColor: string;
 }
 
 const DEFAULTS: Omit<Preset, 'image'> = {
@@ -43,6 +45,7 @@ const DEFAULTS: Omit<Preset, 'image'> = {
     brightness: 0.75,
     spring: 0.5,
     damping: 0.2,
+    backgroundColor: '#000000',
 };
 
 const decoder = new TextDecoder();
@@ -68,7 +71,7 @@ function writeJson(path: string, data: unknown): void {
 /** Absolute image path from a preset, or the bundled painting as a starting point. */
 function loadPreset(): Preset {
     const saved = readJson(GLib.build_filenamev([PAINTING_DIR, 'preset.json'])) ?? {};
-    const number = (key: keyof typeof DEFAULTS) =>
+    const number = (key: Exclude<keyof typeof DEFAULTS, 'backgroundColor'>) =>
         typeof saved[key] === 'number' ? saved[key] as number : DEFAULTS[key];
     let image = typeof saved.image === 'string' ? saved.image : '';
     if (image && !GLib.path_is_absolute(image))
@@ -81,6 +84,8 @@ function loadPreset(): Preset {
         brightness: number('brightness'),
         spring: number('spring'),
         damping: number('damping'),
+        backgroundColor: typeof saved.backgroundColor === 'string' && /^#[0-9a-f]{6}$/i.test(saved.backgroundColor)
+            ? saved.backgroundColor : DEFAULTS.backgroundColor,
     };
 }
 
@@ -137,6 +142,11 @@ function spinRow(
     });
     group.add(row);
     return row;
+}
+
+function rgbaToHex(rgba: Gdk.RGBA): string {
+    const channel = (value: number) => Math.round(value * 255).toString(16).padStart(2, '0');
+    return `#${channel(rgba.red)}${channel(rgba.green)}${channel(rgba.blue)}`;
 }
 
 export function particlePaintingPage(window: Adw.PreferencesWindow, settings: Gio.Settings): Adw.PreferencesPage {
@@ -202,12 +212,26 @@ export function particlePaintingPage(window: Adw.PreferencesWindow, settings: Gi
         _('How quickly particles fly back to the image'), 0.1, 3, 0.05, 2);
     const damping = spinRow(lookGroup, _('Damping'),
         _('Low values let particles drift longer'), 0.2, 6, 0.1, 1);
+    const backgroundRow = new Adw.ActionRow({
+        title: _('Background Color'),
+        subtitle: _('Color of the particles that fill the screen around the image'),
+    });
+    const backgroundButton = new Gtk.ColorDialogButton({
+        dialog: new Gtk.ColorDialog({title: _('Background Color'), with_alpha: false}),
+        valign: Gtk.Align.CENTER,
+    });
+    backgroundRow.add_suffix(backgroundButton);
+    backgroundRow.activatable_widget = backgroundButton;
+    lookGroup.add(backgroundRow);
 
     const showValues = () => {
         particles.value = preset.particleBudget;
         brightness.value = preset.brightness;
         spring.value = preset.spring;
         damping.value = preset.damping;
+        const color = new Gdk.RGBA();
+        color.parse(preset.backgroundColor);
+        backgroundButton.rgba = color;
     };
     showValues();
 
@@ -234,6 +258,7 @@ export function particlePaintingPage(window: Adw.PreferencesWindow, settings: Gi
         preset.brightness = brightness.value;
         preset.spring = spring.value;
         preset.damping = damping.value;
+        preset.backgroundColor = rgbaToHex(backgroundButton.rgba);
         try {
             const folder = savePainting(preset);
             preset.image = GLib.build_filenamev([folder, 'assets', GLib.path_get_basename(preset.image)]);
