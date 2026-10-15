@@ -15,16 +15,19 @@ The wallpaper ships two implementations of the same simulation:
 
 ## Preset
 
-`preset.json` is read by both implementations:
+The native renderer reads these keys from `preset.json` at startup:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `image` | `assets/starry-night.jpg` | Source image, relative to this folder (native renderer) |
-| `damping` | `0.2` | Velocity damping |
-| `spring` | `0.5` | Return force toward the home position |
+| `image` | `assets/starry-night.jpg` | Source image, relative to this folder or absolute |
 | `brightness` | `0.75` | Overall brightness |
-| `particleBudget` | `96000` | Particle budget, rounded to the image grid |
-| `interactionHz` | `240` | Cursor interpolation rate |
+| `spring` | `0.5` | Return force toward the home position |
+| `damping` | `0.2` | Velocity damping |
+
+The particle budget (96,000) and cursor interpolation (240 Hz) are fixed in
+this release; `particleBudget`, `interactionHz`, `quality` and `fpsCap` are
+informational. The HTML version does not read `preset.json`; it uses the
+defaults in `index.html`.
 
 To make your own painting, copy this folder, replace the image, update
 `preset.json`, then run `gnome-live-wallpaper set /path/to/folder`.
