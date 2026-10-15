@@ -14,7 +14,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: packages/hanabi/package-lock.json
+          cache-dependency-path: |
+            packages/hanabi/package-lock.json
+            packages/hanabi/tools/package-lock.json
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -22,6 +24,9 @@ jobs:
             libwayland-dev libegl-dev libgles-dev libgdk-pixbuf-2.0-dev
       - run: npm ci --no-audit --no-fund
         working-directory: packages/hanabi
+      - name: Install ESLint config
+        run: npm ci --no-audit --no-fund
+        working-directory: packages/hanabi/tools
       - run: npm run check
       - run: npm run build
       - run: npm run build:native
