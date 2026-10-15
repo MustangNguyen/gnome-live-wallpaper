@@ -1,6 +1,6 @@
 {
   "name": "gnome-live-wallpaper",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Live wallpapers for GNOME Shell on Wayland: a Hanabi fork with HTML wallpapers and a native C++/OpenGL ES particle renderer.",
   "keywords": [
     "gnome",

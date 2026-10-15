@@ -154,12 +154,41 @@ function setWallpaperPath(wallpaper) {
     log(`Wallpaper: ${wallpaper}`);
 }
 
+const sleep = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+/** Polls GNOME Shell until the extension state matches, up to timeoutMs. */
+function waitForState(wanted, timeoutMs = 5000) {
+    for (let waited = 0; waited < timeoutMs; waited += 250) {
+        if (wanted(extensionInfo()?.state))
+            return true;
+        sleep(250);
+    }
+    return false;
+}
+
+/** Disables and waits until the shell has finished tearing the extension down. */
+function disableExtension() {
+    run('gnome-extensions', ['disable', UUID], {quiet: true});
+    waitForState(state => state !== 'ACTIVE');
+    // The renderer exits asynchronously after disable(); give it time to go.
+    sleep(1000);
+}
+
 function enableExtension() {
     if (!haveCommand('gnome-extensions')) {
         warn('gnome-extensions not found; enable the extension from the Extensions app.');
         return false;
     }
-    return run('gnome-extensions', ['enable', UUID], {quiet: true}).status === 0;
+    // An enable that lands while a previous disable is still settling leaves the
+    // extension enabled but INACTIVE, so verify and retry once.
+    for (let attempt = 0; attempt < 2; attempt++) {
+        if (run('gnome-extensions', ['enable', UUID], {quiet: true}).status !== 0)
+            return false;
+        if (waitForState(state => state === 'ACTIVE'))
+            return true;
+        disableExtension();
+    }
+    return false;
 }
 
 function installNative(extensionDir, flags) {
@@ -256,7 +285,7 @@ function install(flags) {
     // GJS caches loaded modules, so replaced extension code runs only after relogin.
     const replacing = before !== null;
     if (before?.enabled)
-        run('gnome-extensions', ['disable', UUID], {quiet: true});
+        disableExtension();
     try {
         backupForeignExtension();
         replaceDir(paths.staging, paths.extension);
@@ -309,7 +338,7 @@ function uninstall(flags) {
             'Use --force to remove it anyway.');
     }
     if (extensionInfo())
-        run('gnome-extensions', ['disable', UUID], {quiet: true});
+        disableExtension();
     fs.rmSync(paths.extension, {recursive: true, force: true});
 
     const current = currentWallpaper();
@@ -347,7 +376,7 @@ function restore() {
     if (fs.existsSync(paths.extension) && !isOurs(paths.extension))
         throw new Error(`${paths.extension} exists and was not installed by ${MARKER}; remove it first.`);
     if (extensionInfo())
-        run('gnome-extensions', ['disable', UUID], {quiet: true});
+        disableExtension();
     replaceDir(backup, paths.extension);
     log(`Restored ${backup} to ${paths.extension}. Log out and back in, then enable the extension.`);
 }
@@ -386,7 +415,7 @@ function status() {
 function restart() {
     if (!haveCommand('gnome-extensions'))
         throw new Error('gnome-extensions not found.');
-    run('gnome-extensions', ['disable', UUID]);
+    disableExtension();
     if (!enableExtension())
         throw new Error('Enable failed; log out and back in if the extension was just installed.');
     log('Renderer restarted.');
